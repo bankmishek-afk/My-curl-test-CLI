@@ -1,7 +1,7 @@
 #!/bin/bash
 # ============================================================
-# 🚀 ULTIMATE CLI INSTALLER v3.2 - FULLY AUTOMATIC
-# Полностью автоматическая установка без вопросов
+# 🚀 ULTIMATE CLI INSTALLER v3.3 - CODESPACES FIX
+# Полностью автоматическая установка с фиксом для Codespaces
 # ============================================================
 
 set -e
@@ -24,29 +24,9 @@ INSTALL_DIR="$HOME/.local/bin"
 CONFIG_DIR="$HOME/.config/mycli"
 DATA_DIR="$HOME/.local/share/mycli"
 CLI_NAME="mycli"
-VERSION="3.2.0"
+VERSION="3.3.0"
 
 # ========== ФУНКЦИИ ==========
-
-# Простой прогресс-бар
-show_progress() {
-    local current=$1
-    local total=$2
-    local message="$3"
-    local width=40
-    local percent=$((current * 100 / total))
-    local filled=$((percent * width / 100))
-    
-    echo -ne "\r${CYAN}[${RESET}"
-    for ((i=0; i<width; i++)); do
-        if [ $i -lt $filled ]; then
-            echo -ne "${BG_GREEN}${BLACK}=${RESET}"
-        else
-            echo -ne "${BG_BLACK}${WHITE} ${RESET}"
-        fi
-    done
-    echo -ne "${CYAN}]${RESET} ${BOLD}${percent}%${RESET} ${message}    "
-}
 
 # Большой баннер
 draw_banner() {
@@ -61,7 +41,7 @@ draw_banner() {
     echo "║     ╚═╝     ╚═╝   ╚═╝    ╚═════╝╚══════╝╚═╝               ║"
     echo "║                                                              ║"
     echo "║               ${WHITE}${BOLD}AUTOMATIC INSTALLER v${VERSION}${CYAN}             ║"
-    echo "║          ${GRAY}No questions asked - Just works!${CYAN}                ║"
+    echo "║          ${GRAY}Optimized for Codespaces${CYAN}                      ║"
     echo "║                                                              ║"
     echo "╚══════════════════════════════════════════════════════════════╝"
     echo -e "${RESET}"
@@ -73,18 +53,8 @@ draw_banner() {
 check_requirements() {
     echo -e "${BLUE}🔍 Проверка требований...${RESET}"
     
-    local missing=()
-    
     if ! command -v curl &> /dev/null; then
-        missing+=("curl")
-    fi
-    
-    if ! command -v bash &> /dev/null; then
-        missing+=("bash")
-    fi
-    
-    if [ ${#missing[@]} -ne 0 ]; then
-        echo -e "${RED}❌ Отсутствуют: ${missing[*]}${RESET}"
+        echo -e "${RED}❌ curl не найден${RESET}"
         exit 1
     fi
     
@@ -112,7 +82,7 @@ download_cli() {
         exit 1
     fi
     
-    # Создаём конфиг по умолчанию
+    # Создаём конфиг
     cat > "$CONFIG_DIR/default.conf" << 'EOF'
 # MyCLI Configuration
 theme=default
@@ -141,7 +111,7 @@ setup_shell() {
         touch "$shell_rc"
     fi
     
-    # Добавляем в PATH
+    # Добавляем в PATH если ещё нет
     if ! grep -q "MYCLI" "$shell_rc" 2>/dev/null; then
         cat >> "$shell_rc" << EOF
 
@@ -167,11 +137,34 @@ EOF
     echo ""
 }
 
+# ФИКС: Добавляем в текущую сессию
+fix_current_session() {
+    echo -e "${BLUE}🔧 Применение настроек в текущей сессии...${RESET}"
+    
+    # Добавляем в PATH для текущей сессии
+    export PATH="$INSTALL_DIR:$PATH"
+    
+    # Создаём алиас для текущей сессии
+    alias mycli="$INSTALL_DIR/$CLI_NAME" 2>/dev/null || true
+    
+    # Проверяем, что работает
+    if command -v mycli &>/dev/null; then
+        echo -e "${GREEN}✅ MyCLI доступен в текущей сессии${RESET}"
+    else
+        echo -e "${YELLOW}⚠️  Используйте полный путь: $INSTALL_DIR/$CLI_NAME${RESET}"
+        echo -e "${YELLOW}⚠️  Или выполните: source $HOME/.bashrc${RESET}"
+    fi
+    
+    echo ""
+}
+
 test_installation() {
     echo -e "${BLUE}🧪 Тестирование...${RESET}"
     
+    # Используем полный путь для теста
     if "$INSTALL_DIR/$CLI_NAME" version &>/dev/null; then
-        echo -e "${GREEN}✅ Установка работает${RESET}"
+        local version=$("$INSTALL_DIR/$CLI_NAME" version 2>&1 | head -1)
+        echo -e "${GREEN}✅ Установка работает: $version${RESET}"
     else
         echo -e "${YELLOW}⚠️  Тест не пройден, но файл установлен${RESET}"
     fi
@@ -187,8 +180,15 @@ show_completion() {
     echo -e "${CYAN}${BOLD}╚══════════════════════════════════════════════════════════════╝${RESET}"
     echo ""
     
+    echo -e "${YELLOW}${BOLD}📌  ВАЖНО ДЛЯ CODESPACES:${RESET}"
+    echo -e "  ${GRAY}•${RESET} MyCLI установлен в: ${CYAN}$INSTALL_DIR/${CLI_NAME}${RESET}"
+    echo -e "  ${GRAY}•${RESET} Для использования в ЭТОМ терминале:"
+    echo -e "    ${CYAN}source ~/.bashrc${RESET} ${DIM}# или перезапустите терминал${RESET}"
+    echo -e "  ${GRAY}•${RESET} Или используйте полный путь: ${CYAN}$INSTALL_DIR/$CLI_NAME help${RESET}"
+    echo ""
+    
     echo -e "${YELLOW}${BOLD}📌  БЫСТРЫЙ СТАРТ:${RESET}"
-    echo -e "  ${GRAY}1.${RESET} Примените настройки: ${CYAN}source ~/.$(basename "$SHELL")rc${RESET}"
+    echo -e "  ${GRAY}1.${RESET} Примените настройки: ${CYAN}source ~/.bashrc${RESET}"
     echo -e "  ${GRAY}2.${RESET} Проверьте установку: ${CYAN}mycli version${RESET}"
     echo -e "  ${GRAY}3.${RESET} Попробуйте команды:"
     echo -e "     ${CYAN}mycli hello --name Вася${RESET}"
@@ -212,51 +212,20 @@ main() {
     echo -e "${DIM}Путь: $INSTALL_DIR${RESET}"
     echo ""
     
-    # Шаги установки с прогрессом
-    steps=5
-    current=0
-    
-    # Шаг 1
-    ((current++))
-    show_progress $current $steps "Проверка требований..."
-    check_requirements > /dev/null 2>&1
-    echo ""
-    
-    # Шаг 2
-    ((current++))
-    show_progress $current $steps "Создание директорий..."
-    create_directories > /dev/null 2>&1
-    echo ""
-    
-    # Шаг 3
-    ((current++))
-    show_progress $current $steps "Загрузка файлов..."
-    download_cli > /dev/null 2>&1
-    echo ""
-    
-    # Шаг 4
-    ((current++))
-    show_progress $current $steps "Настройка оболочки..."
-    setup_shell > /dev/null 2>&1
-    echo ""
-    
-    # Шаг 5
-    ((current++))
-    show_progress $current $steps "Тестирование..."
-    test_installation > /dev/null 2>&1
-    echo ""
-    echo ""
-    
-    # Показываем детали
+    # Запуск установки
     check_requirements
     create_directories
     download_cli
     setup_shell
+    fix_current_session
     test_installation
     show_completion
     
-    # Добавляем в текущую сессию
-    export PATH="$PATH:$INSTALL_DIR"
+    # Показываем как использовать прямо сейчас
+    echo -e "${CYAN}💡 Используйте прямо сейчас:${RESET}"
+    echo -e "  ${DIM}$ $INSTALL_DIR/$CLI_NAME version${RESET}"
+    echo -e "  ${DIM}$ $INSTALL_DIR/$CLI_NAME help${RESET}"
+    echo ""
 }
 
 main "$@"
