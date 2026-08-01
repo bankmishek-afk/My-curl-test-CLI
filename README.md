@@ -1,1 +1,0 @@
-# My-curl-test-CLI
