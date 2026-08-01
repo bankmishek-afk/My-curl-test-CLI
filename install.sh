@@ -1,7 +1,8 @@
 #!/bin/bash
 # ============================================================
-# 🚀 ULTIMATE CLI INSTALLER v3.0
-# Современный установщик с цветным GUI и прогресс-барами
+# 🚀 ULTIMATE CLI INSTALLER v3.1
+# Современный установщик с GUI-индикаторами
+# Исправлена обработка ввода для curl | bash
 # ============================================================
 
 set -e
@@ -36,21 +37,28 @@ BG_CYAN='\033[46m'
 BG_WHITE='\033[47m'
 
 # ========== ПЕРЕМЕННЫЕ ==========
-REPO_URL="https://raw.githubusercontent.com/yourusername/yourrepo/main"
+REPO_URL="https://raw.githubusercontent.com/bankmishek-afk/My-curl-test-CLI/refs/heads/main"
 INSTALL_DIR="$HOME/.local/bin"
 CONFIG_DIR="$HOME/.config/mycli"
 DATA_DIR="$HOME/.local/share/mycli"
 CLI_MAIN="cli.sh"
 CLI_NAME="mycli"
-VERSION="3.0.0"
+VERSION="3.1.0"
 TOTAL_STEPS=8
 CURRENT_STEP=0
+NON_INTERACTIVE=false
+
+# ========== ОПРЕДЕЛЕНИЕ ИНТЕРАКТИВНОСТИ ==========
+# Проверяем, запущен ли скрипт через curl | bash
+if [ ! -t 0 ] || [ -z "$PS1" ]; then
+    NON_INTERACTIVE=true
+fi
 
 # ========== ФУНКЦИИ GUI ==========
 
 # Рисует красивый заголовок с рамкой
 draw_header() {
-    clear
+    clear 2>/dev/null || true
     echo -e "${CYAN}${BOLD}"
     echo "╔══════════════════════════════════════════════════════════════╗"
     echo "║                                                              ║"
@@ -67,6 +75,31 @@ draw_header() {
     echo "╚══════════════════════════════════════════════════════════════╝"
     echo -e "${RESET}"
     echo ""
+}
+
+# Функция для безопасного ввода
+safe_read() {
+    local prompt="$1"
+    local default="${2:-}"
+    local response=""
+    
+    if [ "$NON_INTERACTIVE" = true ]; then
+        # Неинтерактивный режим - используем значения по умолчанию
+        echo -e "${YELLOW}⚠️  Неинтерактивный режим, используем значения по умолчанию${RESET}"
+        echo "$default"
+        return 0
+    fi
+    
+    # Интерактивный режим
+    while true; do
+        echo -ne "$prompt"
+        read -r response
+        if [ -n "$response" ] || [ -n "$default" ]; then
+            echo "${response:-$default}"
+            return 0
+        fi
+        echo -e "${RED}❌ Введите значение или нажмите Enter для значения по умолчанию${RESET}"
+    done
 }
 
 # Рисует прогресс-бар
@@ -99,12 +132,14 @@ show_step() {
     echo ""
     
     # Анимация спиннера
-    local spin='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
-    local i=0
-    for ((j=0; j<15; j++)); do
-        echo -ne "\r${CYAN}  ${spin:i++%10:1}  ${DIM}Выполняется...${RESET}"
-        sleep 0.1
-    done
+    if [ "$NON_INTERACTIVE" = false ]; then
+        local spin='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+        local i=0
+        for ((j=0; j<15; j++)); do
+            echo -ne "\r${CYAN}  ${spin:i++%10:1}  ${DIM}Выполняется...${RESET}"
+            sleep 0.1
+        done
+    fi
     echo -e "\r${GREEN}  ✅  Готово!${RESET}    "
     echo ""
 }
@@ -126,45 +161,6 @@ show_info_table() {
     echo -e "${GRAY}└────────────────────────┴──────────────────────────────┘${RESET}"
 }
 
-# Создаёт меню выбора
-create_menu() {
-    local prompt="$1"
-    shift
-    local options=("$@")
-    local selected=0
-    
-    echo -e "${CYAN}${BOLD}📋 ${prompt}${RESET}"
-    echo ""
-    
-    while true; do
-        for i in "${!options[@]}"; do
-            if [ $i -eq $selected ]; then
-                echo -e "  ${GREEN}${BOLD}▶${RESET} ${GREEN}${BOLD}${options[$i]}${RESET} ${DIM}(выбрано)${RESET}"
-            else
-                echo -e "    ${DIM}${options[$i]}${RESET}"
-            fi
-        done
-        
-        echo ""
-        echo -e "${DIM}Используйте ↑/↓ для выбора, Enter для подтверждения${RESET}"
-        
-        read -rsn1 key
-        if [[ $key == $'\x1b' ]]; then
-            read -rsn2 key
-            if [[ $key == '[A' ]]; then
-                selected=$(( (selected - 1 + ${#options[@]}) % ${#options[@]} ))
-            elif [[ $key == '[B' ]]; then
-                selected=$(( (selected + 1) % ${#options[@]} ))
-            fi
-        elif [[ $key == "" ]]; then
-            break
-        fi
-    done
-    
-    echo ""
-    return $selected
-}
-
 # ========== ОСНОВНЫЕ ФУНКЦИИ УСТАНОВКИ ==========
 
 check_requirements() {
@@ -182,19 +178,11 @@ check_requirements() {
     
     # Проверка bash
     if command -v bash &> /dev/null; then
-        local bash_version=$(bash --version | head -1 | grep -oP '\d+\.\d+')
+        local bash_version=$(bash --version | head -1 | grep -oP '\d+\.\d+' 2>/dev/null || echo "4.0+")
         echo -e "  ${GREEN}✅ bash $bash_version${RESET}"
     else
         echo -e "  ${RED}❌ bash не найден${RESET}"
         requirements+=("bash")
-    fi
-    
-    # Проверка Python (опционально)
-    if command -v python3 &> /dev/null; then
-        local python_version=$(python3 --version | cut -d' ' -f2)
-        echo -e "  ${GREEN}✅ python3 $python_version (опционально)${RESET}"
-    else
-        echo -e "  ${YELLOW}⚠️  python3 не найден (опционально)${RESET}"
     fi
     
     # Проверка прав на запись
@@ -240,15 +228,16 @@ download_files() {
     show_step "Загрузка файлов CLI" "🌐" "$YELLOW"
     
     echo -e "  ${CYAN}Загрузка основного файла...${RESET}"
-    curl -fsSL "$REPO_URL/$CLI_MAIN" -o "$INSTALL_DIR/$CLI_NAME"
-    chmod +x "$INSTALL_DIR/$CLI_NAME"
-    echo -e "  ${GREEN}✅ $CLI_NAME загружен${RESET}"
+    if curl -fsSL "$REPO_URL/$CLI_MAIN" -o "$INSTALL_DIR/$CLI_NAME"; then
+        chmod +x "$INSTALL_DIR/$CLI_NAME"
+        echo -e "  ${GREEN}✅ $CLI_NAME загружен${RESET}"
+    else
+        echo -e "  ${RED}❌ Ошибка загрузки $CLI_NAME${RESET}"
+        exit 1
+    fi
     
     echo -e "  ${CYAN}Загрузка конфигурации...${RESET}"
     curl -fsSL "$REPO_URL/config/default.conf" -o "$CONFIG_DIR/default.conf" 2>/dev/null || echo -e "  ${YELLOW}⚠️  Конфиг не найден, создаём пустой${RESET}"
-    
-    echo -e "  ${CYAN}Загрузка плагинов...${RESET}"
-    curl -fsSL "$REPO_URL/plugins/hello.plugin" -o "$CONFIG_DIR/plugins/hello.plugin" 2>/dev/null || echo -e "  ${YELLOW}⚠️  Плагины не найдены${RESET}"
     
     echo ""
     echo -e "${GREEN}✅ Все файлы загружены!${RESET}"
@@ -276,7 +265,7 @@ configure_shell() {
     fi
     
     # Добавляем в PATH если ещё нет
-    if ! grep -q "$INSTALL_DIR" "$shell_rc"; then
+    if ! grep -q "$INSTALL_DIR" "$shell_rc" 2>/dev/null; then
         echo "" >> "$shell_rc"
         echo "# MyCLI Configuration" >> "$shell_rc"
         echo "export PATH=\"\$PATH:$INSTALL_DIR\"" >> "$shell_rc"
@@ -300,41 +289,6 @@ EOF
     echo -e "  ${GREEN}✅ Переменные окружения созданы${RESET}"
     echo ""
     echo -e "${GREEN}✅ Настройка завершена!${RESET}"
-}
-
-install_dependencies() {
-    show_step "Установка зависимостей" "📦" "$MAGENTA"
-    
-    local deps_installed=0
-    
-    # Проверяем и устанавливаем jq (парсер JSON)
-    if ! command -v jq &> /dev/null; then
-        echo -e "  ${YELLOW}⚠️  Установка jq...${RESET}"
-        if command -v apt-get &> /dev/null; then
-            sudo apt-get update -qq && sudo apt-get install -y jq > /dev/null 2>&1 && deps_installed=1
-        elif command -v brew &> /dev/null; then
-            brew install jq > /dev/null 2>&1 && deps_installed=1
-        elif command -v yum &> /dev/null; then
-            sudo yum install -y jq > /dev/null 2>&1 && deps_installed=1
-        fi
-        if [ $deps_installed -eq 1 ]; then
-            echo -e "  ${GREEN}✅ jq установлен${RESET}"
-        else
-            echo -e "  ${RED}❌ Не удалось установить jq (пропускаем)${RESET}"
-        fi
-    else
-        echo -e "  ${GREEN}✅ jq уже установлен${RESET}"
-    fi
-    
-    # Проверяем fzf (для поиска)
-    if ! command -v fzf &> /dev/null; then
-        echo -e "  ${YELLOW}⚠️  fzf не найден (опционально)${RESET}"
-    else
-        echo -e "  ${GREEN}✅ fzf установлен${RESET}"
-    fi
-    
-    echo ""
-    echo -e "${GREEN}✅ Зависимости проверены!${RESET}"
 }
 
 setup_completions() {
@@ -384,7 +338,7 @@ EOF
         *) shell_rc="$HOME/.profile" ;;
     esac
     
-    if ! grep -q "mycli/completions.sh" "$shell_rc"; then
+    if ! grep -q "mycli/completions.sh" "$shell_rc" 2>/dev/null; then
         echo "source $comp_file" >> "$shell_rc"
         echo -e "  ${GREEN}✅ Автодополнение добавлено${RESET}"
     else
@@ -409,8 +363,8 @@ test_installation() {
     fi
     
     # Тест 2: Проверка версии
-    local version_output=$("$INSTALL_DIR/$CLI_NAME" version 2>&1 || echo "failed")
-    if [[ "$version_output" != *"failed"* ]]; then
+    if "$INSTALL_DIR/$CLI_NAME" version &>/dev/null; then
+        local version_output=$("$INSTALL_DIR/$CLI_NAME" version 2>&1 | head -1)
         echo -e "  ${GREEN}✅ Версия: $version_output${RESET}"
     else
         echo -e "  ${YELLOW}⚠️  Не удалось получить версию${RESET}"
@@ -449,7 +403,6 @@ show_summary() {
     echo -e "  ${GRAY}1.${RESET} Перезагрузите оболочку: ${CYAN}source ~/.$(basename "$SHELL")rc${RESET}"
     echo -e "  ${GRAY}2.${RESET} Запустите CLI: ${CYAN}mycli help${RESET}"
     echo -e "  ${GRAY}3.${RESET} Попробуйте команды: ${CYAN}mycli hello --name Вася${RESET}"
-    echo -e "  ${GRAY}4.${RESET} Плагины: ${CYAN}mycli plugin list${RESET}"
     echo ""
     
     echo -e "${DIM}Для удаления выполните: curl -fsSL $REPO_URL/uninstall.sh | bash${RESET}"
@@ -463,20 +416,45 @@ main() {
     echo -e "${GRAY}${BOLD}🚀 Запуск установки...${RESET}"
     echo -e "${DIM}Версия: $VERSION | Дата: $(date '+%d.%m.%Y %H:%M:%S')${RESET}"
     
-    # Проверка, что мы не в продакшене
-    echo ""
-    echo -ne "${YELLOW}⚠️  Установить MyCLI в $INSTALL_DIR? [Y/n] ${RESET}"
-    read -r confirm
-    if [[ ! "$confirm" =~ ^[Yy]$ ]] && [[ ! -z "$confirm" ]]; then
-        echo -e "${RED}❌ Установка отменена${RESET}"
-        exit 0
+    # Проверка, установлен ли уже
+    if [ -f "$INSTALL_DIR/$CLI_NAME" ]; then
+        echo ""
+        echo -e "${YELLOW}⚠️  MyCLI уже установлен!${RESET}"
+        echo -e "  ${DIM}Путь: $INSTALL_DIR/$CLI_NAME${RESET}"
+        echo ""
+        
+        if [ "$NON_INTERACTIVE" = true ]; then
+            echo -e "${YELLOW}⚠️  Неинтерактивный режим: переустановка...${RESET}"
+            echo ""
+        else
+            echo -ne "${YELLOW}Переустановить? [y/N] ${RESET}"
+            read -r confirm
+            if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+                echo -e "${GREEN}✅ Установка отменена${RESET}"
+                exit 0
+            fi
+        fi
+    else
+        # Спрашиваем подтверждение только в интерактивном режиме
+        if [ "$NON_INTERACTIVE" = false ]; then
+            echo ""
+            echo -ne "${YELLOW}Установить MyCLI в $INSTALL_DIR? [Y/n] ${RESET}"
+            read -r confirm
+            if [[ "$confirm" =~ ^[Nn]$ ]]; then
+                echo -e "${RED}❌ Установка отменена${RESET}"
+                exit 0
+            fi
+        else
+            echo -e "${DIM}Неинтерактивный режим: установка продолжается...${RESET}"
+        fi
     fi
+    
+    echo ""
     
     # Запуск установки
     check_requirements
     create_directories
     download_files
-    install_dependencies
     configure_shell
     setup_completions
     test_installation
@@ -484,6 +462,14 @@ main() {
     
     echo -e "${GREEN}${BOLD}🎉 Установка завершена! Приятного использования!${RESET}"
     echo ""
+    
+    # Автоматически добавляем в текущую сессию
+    export PATH="$PATH:$INSTALL_DIR"
+    alias mycli="$INSTALL_DIR/$CLI_NAME" 2>/dev/null || true
+    
+    echo -e "${DIM}💡 Совет: выполните 'source ~/.$(basename "$SHELL")rc' для применения настроек${RESET}"
+    echo ""
 }
 
+# ========== ЗАПУСК ==========
 main "$@"
