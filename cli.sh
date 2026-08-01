@@ -285,4 +285,436 @@ cmd_weather() {
     echo ""
     
     # Имитация запроса погоды
-    echo -e "${DIM}Загрузка данных о погоде
+    echo -e "${DIM}Загрузка данных о погоде...${RESET}"
+    sleep 0.5
+    
+    # Генерация случайной погоды
+    local temps=(-5..35)
+    local conditions=("☀️ Ясно" "⛅ Переменная облачность" "☁️ Облачно" "🌧️ Дождь" "🌨️ Снег" "🌤️ Солнечно" "💨 Ветрено")
+    local humidity=$((RANDOM % 50 + 40))
+    local wind=$((RANDOM % 30 + 1))
+    local temp=$((RANDOM % 40 - 5))
+    local condition=${conditions[$RANDOM % ${#conditions[@]}]}
+    
+    # Погодная карта
+    echo -e "${CYAN}┌─────────────────────────────────────────────────┐${RESET}"
+    echo -e "${CYAN}│${RESET}  $condition                                                  ${CYAN}│${RESET}"
+    echo -e "${CYAN}│${RESET}  🌡️  Температура: ${BOLD}${temp}°C${RESET}                                    ${CYAN}│${RESET}"
+    echo -e "${CYAN}│${RESET}  💧  Влажность: ${BOLD}${humidity}%${RESET}                                      ${CYAN}│${RESET}"
+    echo -e "${CYAN}│${RESET}  💨  Ветер: ${BOLD}${wind} м/с${RESET}                                       ${CYAN}│${RESET}"
+    echo -e "${CYAN}│${RESET}  📍  Город: ${BOLD}$city${RESET}                                          ${CYAN}│${RESET}"
+    echo -e "${CYAN}└─────────────────────────────────────────────────┘${RESET}"
+    echo ""
+    
+    # Прогноз на 5 дней
+    echo -e "${YELLOW}${BOLD}📊 Прогноз на 5 дней:${RESET}"
+    echo ""
+    for i in {1..5}; do
+        local day_temp=$((temp + RANDOM % 10 - 5))
+        local day_cond=${conditions[$RANDOM % ${#conditions[@]}]}
+        local day_name=$(date -d "+$i days" '+%a')
+        printf "  ${GREEN}%3s${RESET}  %-2s  %-15s  %3d°C\n" "$day_name" ":" "$day_cond" "$day_temp"
+    done
+    echo ""
+    
+    log "Погода в $city: $condition, $temp°C"
+}
+
+# Команда: system - информация о системе
+cmd_system() {
+    echo ""
+    draw_box "🖥️ СИСТЕМНАЯ ИНФОРМАЦИЯ" "$YELLOW"
+    echo ""
+    
+    # Заголовок
+    echo -e "${CYAN}${BOLD}╔════════════════════════════════════════════════════╗${RESET}"
+    echo -e "${CYAN}${BOLD}║${RESET}  ${WHITE}${BOLD}СИСТЕМА${RESET}                                              ${CYAN}${BOLD}║${RESET}"
+    echo -e "${CYAN}${BOLD}╚════════════════════════════════════════════════════╝${RESET}"
+    echo ""
+    
+    # Информация о системе
+    echo -e "${GREEN}📌 ОС:${RESET}     ${BOLD}$(uname -s) $(uname -r)${RESET}"
+    echo -e "${GREEN}📌 Хост:${RESET}   ${BOLD}$(hostname)${RESET}"
+    echo -e "${GREEN}📌 Пользователь:${RESET} ${BOLD}$(whoami)${RESET}"
+    echo -e "${GREEN}📌 Архитектура:${RESET} ${BOLD}$(uname -m)${RESET}"
+    echo ""
+    
+    # CPU
+    echo -e "${GREEN}💻 CPU:${RESET}"
+    if command_exists nproc; then
+        echo -e "  • Ядер: ${BOLD}$(nproc)${RESET}"
+    fi
+    if command_exists lscpu; then
+        echo -e "  • Модель: ${BOLD}$(lscpu | grep "Model name" | cut -d':' -f2 | xargs)${RESET}"
+    fi
+    echo ""
+    
+    # Память
+    echo -e "${GREEN}🧠 ПАМЯТЬ:${RESET}"
+    if command_exists free; then
+        local mem_total=$(free -h | grep -i mem | awk '{print $2}')
+        local mem_used=$(free -h | grep -i mem | awk '{print $3}')
+        local mem_percent=$(free | grep -i mem | awk '{print $3/$2 * 100.0}' | cut -d'.' -f1)
+        echo -e "  • Всего: ${BOLD}$mem_total${RESET}"
+        echo -e "  • Использовано: ${BOLD}$mem_used${RESET}"
+        echo -e "  • Загруженность: ${BOLD}${mem_percent}%${RESET}"
+        
+        # Визуальный индикатор памяти
+        local bar_width=30
+        local filled=$((mem_percent * bar_width / 100))
+        echo -ne "  • "
+        for ((i=0; i<bar_width; i++)); do
+            if [ $i -lt $filled ]; then
+                echo -ne "${BG_GREEN}${BLACK} ${RESET}"
+            else
+                echo -ne "${BG_BLACK}${WHITE} ${RESET}"
+            fi
+        done
+        echo ""
+    fi
+    echo ""
+    
+    # Диск
+    echo -e "${GREEN}💾 ДИСК:${RESET}"
+    if command_exists df; then
+        df -h / | tail -1 | while read -r line; do
+            local total=$(echo $line | awk '{print $2}')
+            local used=$(echo $line | awk '{print $3}')
+            local avail=$(echo $line | awk '{print $4}')
+            local percent=$(echo $line | awk '{print $5}' | sed 's/%//')
+            echo -e "  • Всего: ${BOLD}$total${RESET}"
+            echo -e "  • Использовано: ${BOLD}$used${RESET}"
+            echo -e "  • Свободно: ${BOLD}$avail${RESET}"
+            echo -e "  • Занято: ${BOLD}${percent}%${RESET}"
+        done
+    fi
+    echo ""
+    
+    # Процессы
+    echo -e "${GREEN}📊 ПРОЦЕССЫ:${RESET}"
+    if command_exists ps; then
+        local total_procs=$(ps aux | wc -l)
+        local user_procs=$(ps aux | grep "^$(whoami)" | wc -l)
+        echo -e "  • Всего: ${BOLD}$total_procs${RESET}"
+        echo -e "  • Пользовательских: ${BOLD}$user_procs${RESET}"
+    fi
+    echo ""
+    
+    # Загрузка системы
+    echo -e "${GREEN}📈 ЗАГРУЗКА:${RESET}"
+    if command_exists uptime; then
+        uptime | awk -F'load average:' '{print $2}' | while read -r load; do
+            echo -e "  • Load Average: ${BOLD}$load${RESET}"
+        done
+    fi
+    echo ""
+    
+    log "Показана системная информация"
+}
+
+# Команда: info - информация о CLI
+cmd_info() {
+    echo ""
+    draw_box "ℹ️ ИНФОРМАЦИЯ О CLI" "$MAGENTA"
+    echo ""
+    
+    # ASCII лого
+    echo -e "${CYAN}${BOLD}"
+    cat << 'EOF'
+    ███╗   ███╗██╗   ██╗ ██████╗██╗     ██╗
+    ████╗ ████║╚██╗ ██╔╝██╔════╝██║     ██║
+    ██╔████╔██║ ╚████╔╝ ██║     ██║     ██║
+    ██║╚██╔╝██║  ╚██╔╝  ██║     ██║     ██║
+    ██║ ╚═╝ ██║   ██║   ╚██████╗███████╗██║
+    ╚═╝     ╚═╝   ╚═╝    ╚═════╝╚══════╝╚═╝
+EOF
+    echo -e "${RESET}"
+    
+    echo -e "${BOLD}${CYAN}MyCLI - Modern Command Line Interface${RESET}"
+    echo -e "${DIM}Версия: ${BOLD}$VERSION${RESET}"
+    echo ""
+    
+    # Информация в таблице
+    echo -e "${GRAY}┌─────────────────┬────────────────────────────────────┐${RESET}"
+    echo -e "${GRAY}│${RESET} ${CYAN}Свойство${RESET}         ${GRAY}│${RESET} ${CYAN}Значение${RESET}                            ${GRAY}│${RESET}"
+    echo -e "${GRAY}├─────────────────┼────────────────────────────────────┤${RESET}"
+    printf "${GRAY}│${RESET} %-15s ${GRAY}│${RESET} %-30s ${GRAY}│${RESET}\n" "Название" "MyCLI"
+    printf "${GRAY}│${RESET} %-15s ${GRAY}│${RESET} %-30s ${GRAY}│${RESET}\n" "Версия" "$VERSION"
+    printf "${GRAY}│${RESET} %-15s ${GRAY}│${RESET} %-30s ${GRAY}│${RESET}\n" "Автор" "Your Name"
+    printf "${GRAY}│${RESET} %-15s ${GRAY}│${RESET} %-30s ${GRAY}│${RESET}\n" "Лицензия" "MIT"
+    printf "${GRAY}│${RESET} %-15s ${GRAY}│${RESET} %-30s ${GRAY}│${RESET}\n" "Язык" "Bash"
+    printf "${GRAY}│${RESET} %-15s ${GRAY}│${RESET} %-30s ${GRAY}│${RESET}\n" "Платформы" "Linux, macOS"
+    printf "${GRAY}│${RESET} %-15s ${GRAY}│${RESET} %-30s ${GRAY}│${RESET}\n" "Установлено" "$(date '+%Y-%m-%d')"
+    echo -e "${GRAY}└─────────────────┴────────────────────────────────────┘${RESET}"
+    echo ""
+    
+    # Статистика использования
+    echo -e "${YELLOW}📊 Статистика:${RESET}"
+    local cmd_count=$(grep -c "^cmd_" "$0" || echo "0")
+    local plugins_count=$(find "$PLUGIN_DIR" -name "*.plugin" 2>/dev/null | wc -l)
+    local total_lines=$(wc -l < "$0")
+    echo -e "  • Команд: ${BOLD}$cmd_count${RESET}"
+    echo -e "  • Плагинов: ${BOLD}$plugins_count${RESET}"
+    echo -e "  • Строк кода: ${BOLD}$total_lines${RESET}"
+    echo ""
+    
+    log "Показана информация о CLI"
+}
+
+# Команда: config - управление конфигурацией
+cmd_config() {
+    local action="$1"
+    local key="$2"
+    local value="$3"
+    
+    case "$action" in
+        set)
+            if [[ -z "$key" ]] || [[ -z "$value" ]]; then
+                echo -e "${RED}❌ Использование: config set <ключ> <значение>${RESET}"
+                return 1
+            fi
+            echo "$key=$value" >> "$CONFIG_DIR/default.conf"
+            echo -e "${GREEN}✅ Установлено: $key = $value${RESET}"
+            log "Конфиг установлен: $key=$value"
+            ;;
+        get)
+            if [[ -z "$key" ]]; then
+                echo -e "${RED}❌ Использование: config get <ключ>${RESET}"
+                return 1
+            fi
+            local value=$(grep "^$key=" "$CONFIG_DIR/default.conf" 2>/dev/null | cut -d'=' -f2)
+            if [[ -n "$value" ]]; then
+                echo -e "${CYAN}$key${RESET} = ${GREEN}$value${RESET}"
+            else
+                echo -e "${YELLOW}⚠️  Ключ '$key' не найден${RESET}"
+            fi
+            ;;
+        list)
+            echo -e "${CYAN}${BOLD}📋 Конфигурация:${RESET}"
+            echo ""
+            if [ -f "$CONFIG_DIR/default.conf" ]; then
+                cat "$CONFIG_DIR/default.conf" | while read -r line; do
+                    if [[ -n "$line" ]]; then
+                        echo -e "  ${GREEN}•${RESET} $line"
+                    fi
+                done
+            else
+                echo -e "  ${YELLOW}⚠️  Файл конфигурации не найден${RESET}"
+            fi
+            echo ""
+            ;;
+        *)
+            echo -e "${RED}❌ Неизвестное действие: $action${RESET}"
+            echo -e "${CYAN}Доступные действия: set, get, list${RESET}"
+            return 1
+            ;;
+    esac
+}
+
+# Команда: plugin - управление плагинами
+cmd_plugin() {
+    local action="$1"
+    local name="$2"
+    
+    case "$action" in
+        install)
+            if [[ -z "$name" ]]; then
+                echo -e "${RED}❌ Использование: plugin install <имя>${RESET}"
+                return 1
+            fi
+            echo -e "${CYAN}📦 Установка плагина '$name'...${RESET}"
+            # Создаём заглушку плагина
+            cat > "$PLUGIN_DIR/${name}.plugin" << EOF
+#!/bin/bash
+# Плагин: $name
+# Установлен: $(date)
+
+plugin_${name}_hello() {
+    echo "Привет от плагина $name!"
+}
+
+plugin_${name}_info() {
+    echo "Плагин $name версии 1.0"
+}
+EOF
+            chmod +x "$PLUGIN_DIR/${name}.plugin"
+            echo -e "${GREEN}✅ Плагин '$name' установлен!${RESET}"
+            log "Установлен плагин: $name"
+            ;;
+        remove)
+            if [[ -z "$name" ]]; then
+                echo -e "${RED}❌ Использование: plugin remove <имя>${RESET}"
+                return 1
+            fi
+            if [ -f "$PLUGIN_DIR/${name}.plugin" ]; then
+                rm "$PLUGIN_DIR/${name}.plugin"
+                echo -e "${GREEN}✅ Плагин '$name' удалён${RESET}"
+                log "Удалён плагин: $name"
+            else
+                echo -e "${YELLOW}⚠️  Плагин '$name' не найден${RESET}"
+            fi
+            ;;
+        list)
+            echo -e "${CYAN}${BOLD}📦 Установленные плагины:${RESET}"
+            echo ""
+            if [ -d "$PLUGIN_DIR" ]; then
+                local plugins=$(find "$PLUGIN_DIR" -name "*.plugin" 2>/dev/null)
+                if [[ -n "$plugins" ]]; then
+                    echo "$plugins" | while read -r plugin; do
+                        local name=$(basename "$plugin" .plugin)
+                        echo -e "  ${GREEN}•${RESET} ${BOLD}$name${RESET}"
+                    done
+                else
+                    echo -e "  ${YELLOW}⚠️  Нет установленных плагинов${RESET}"
+                fi
+            else
+                echo -e "  ${YELLOW}⚠️  Директория плагинов не найдена${RESET}"
+            fi
+            echo ""
+            ;;
+        enable)
+            if [[ -z "$name" ]]; then
+                echo -e "${RED}❌ Использование: plugin enable <имя>${RESET}"
+                return 1
+            fi
+            if [ -f "$PLUGIN_DIR/${name}.plugin" ]; then
+                source "$PLUGIN_DIR/${name}.plugin"
+                echo -e "${GREEN}✅ Плагин '$name' активирован${RESET}"
+                log "Активирован плагин: $name"
+            else
+                echo -e "${YELLOW}⚠️  Плагин '$name' не найден${RESET}"
+            fi
+            ;;
+        *)
+            echo -e "${RED}❌ Неизвестное действие: $action${RESET}"
+            echo -e "${CYAN}Доступные действия: install, remove, list, enable${RESET}"
+            return 1
+            ;;
+    esac
+}
+
+# Команда: help - справка
+cmd_help() {
+    echo ""
+    draw_box "📖 СПРАВКА MYCLI" "$CYAN"
+    echo ""
+    
+    echo -e "${BOLD}${CYAN}Использование:${RESET} ${WHITE}mycli [КОМАНДА] [АРГУМЕНТЫ]${RESET}"
+    echo ""
+    
+    echo -e "${BOLD}${YELLOW}📌 Основные команды:${RESET}"
+    echo ""
+    
+    # Форматированный список команд
+    cat << 'EOF'
+  ${GREEN}hello${RESET} [--name ИМЯ] [--lang ЯЗЫК] [--emoji СМАЙЛ]
+      👋 Поздороваться с пользователем
+
+  ${GREEN}world${RESET}
+      🌍 Показать информацию о мире
+
+  ${GREEN}date${RESET} [--format ФОРМАТ] [--timezone ЗОНА]
+      📅 Показать дату и время
+
+  ${GREEN}weather${RESET} [ГОРОД]
+      🌤️ Показать погоду в городе
+
+  ${GREEN}system${RESET}
+      🖥️ Показать информацию о системе
+
+  ${GREEN}info${RESET}
+      ℹ️ Показать информацию о CLI
+
+  ${GREEN}config${RESET} [set|get|list] [КЛЮЧ] [ЗНАЧЕНИЕ]
+      ⚙️ Управление конфигурацией
+
+  ${GREEN}plugin${RESET} [install|remove|list|enable] [ИМЯ]
+      🔌 Управление плагинами
+
+  ${GREEN}version${RESET}
+      📌 Показать версию
+
+  ${GREEN}help${RESET}
+      📖 Показать эту справку
+EOF
+    
+    echo ""
+    echo -e "${BOLD}${CYAN}📚 Примеры:${RESET}"
+    echo -e "  ${DIM}$ mycli hello --name Алексей --lang en${RESET}"
+    echo -e "  ${DIM}$ mycli weather Лондон${RESET}"
+    echo -e "  ${DIM}$ mycli config set theme dark${RESET}"
+    echo -e "  ${DIM}$ mycli plugin install awesome${RESET}"
+    echo ""
+    
+    echo -e "${BOLD}${YELLOW}🔧 Полезные алиасы:${RESET}"
+    echo -e "  ${DIM}mycli h${RESET}   -> mycli help"
+    echo -e "  ${DIM}mycli v${RESET}   -> mycli version"
+    echo -e "  ${DIM}mycli w${RESET}   -> mycli weather"
+    echo -e "  ${DIM}mycli s${RESET}   -> mycli system"
+    echo ""
+    
+    log "Показана справка"
+}
+
+# Команда: version - версия
+cmd_version() {
+    echo -e "${CYAN}${BOLD}MyCLI v${VERSION}${RESET}"
+    echo -e "${DIM}Build: $(date '+%Y-%m-%d %H:%M:%S')${RESET}"
+    echo -e "${DIM}Bash: ${BASH_VERSION}${RESET}"
+}
+
+# ========== АЛИАСЫ ДЛЯ КОМАНД ==========
+# Создаём короткие алиасы для часто используемых команд
+alias_commands() {
+    # Эти алиасы будут доступны внутри скрипта
+    # Для внешнего использования они добавляются в .bashrc при установке
+    alias h='cmd_help'
+    alias v='cmd_version'
+    alias w='cmd_weather'
+    alias s='cmd_system'
+}
+
+# ========== MAIN ==========
+main() {
+    # Если нет аргументов, показываем help
+    if [ $# -eq 0 ]; then
+        cmd_help
+        return 0
+    fi
+    
+    # Получаем команду
+    local command="$1"
+    shift
+    
+    # Обработка команд
+    case "$command" in
+        hello|hlo) cmd_hello "$@" ;;
+        world|wrl) cmd_world "$@" ;;
+        date|dte) cmd_date "$@" ;;
+        weather|wth|w) cmd_weather "$@" ;;
+        system|sys|s) cmd_system "$@" ;;
+        info|inf) cmd_info "$@" ;;
+        config|cfg) cmd_config "$@" ;;
+        plugin|plg) cmd_plugin "$@" ;;
+        help|h|--help|-h) cmd_help "$@" ;;
+        version|v|--version|-v) cmd_version "$@" ;;
+        *)
+            echo -e "${RED}❌ Неизвестная команда: $command${RESET}"
+            echo -e "${CYAN}Используйте 'mycli help' для справки${RESET}"
+            return 1
+            ;;
+    esac
+}
+
+# ========== ЗАПУСК ==========
+# Подключаем плагины
+if [ -d "$PLUGIN_DIR" ]; then
+    for plugin in "$PLUGIN_DIR"/*.plugin; do
+        if [ -f "$plugin" ]; then
+            source "$plugin" 2>/dev/null || true
+        fi
+    done
+fi
+
+# Выполняем основную функцию
+main "$@"
